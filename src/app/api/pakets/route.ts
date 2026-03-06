@@ -66,10 +66,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(rowToPaket(data));
     }
 
-    // List Mode: Hanya ambil kolom tertentu, HINDARI base64 (kolom image)
+    // List Mode: Jangan hindari image untuk admin panel agar foto tidak terhapus saat update
     const { data, error } = await supabase
         .from("pakets")
-        .select(`id, kategori, tipe_umroh, nama, harga, durasi, jadwal, badge, badge_color, fasilitas, deskripsi, hotel_mekkah_bintang, maskapai, kota_asal, status_publish, tanggal_berangkat`)
+        .select(`id, kategori, tipe_umroh, nama, harga, durasi, jadwal, badge, badge_color, fasilitas, deskripsi, image, hotel_mekkah_bintang, maskapai, kota_asal, status_publish, tanggal_berangkat`)
         .order("created_at", { ascending: true })
         .limit(100);
 

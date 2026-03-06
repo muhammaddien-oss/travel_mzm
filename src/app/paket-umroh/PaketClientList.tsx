@@ -47,7 +47,7 @@ function PaketCard({ paket, onImageClick, isHistory }: { paket: Paket; onImageCl
             <div className={`relative w-full aspect-[4/5] overflow-hidden cursor-zoom-in group/img ${isHistory ? 'grayscale' : ''}`} onClick={() => onImageClick(imgSrc, paket.nama)}>
                 <Image src={imgSrc} alt={paket.nama} fill className="object-cover transition-transform duration-500 group-hover/img:scale-105" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-                <span className="absolute top-4 left-4 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full text-white shadow-md" style={{ backgroundColor: isHistory ? "#6b7280" : (paket.badgeColor || "#008080") }}>
+                <span className="absolute top-4 left-4 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full text-white shadow-md" style={{ backgroundColor: isHistory ? "#6b7280" : "#008080" }}>
                     {isHistory ? "SUDAH BERANGKAT" : (paket.badge || "PILIHAN TERBAIK")}
                 </span>
             </div>

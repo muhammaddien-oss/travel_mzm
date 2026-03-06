@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import PackageNavbar from "@/components/PackageNavbar";
-import { getAllPakets, type Paket } from "@/lib/packagesData";
+import { getAllPaketsAsync, type Paket } from "@/lib/packagesData";
 
 /* ── Departure schedule entries ── */
 type JadwalEntry = {
@@ -79,10 +79,13 @@ export default function JadwalKeberangkatanPage() {
     const [filterStatus, setFilterStatus] = useState("all");
     const [showHistory, setShowHistory] = useState(false);
     const [page, setPage] = useState(1);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const pakets = getAllPakets();
-        setEntries(buildJadwalEntries(pakets));
+        getAllPaketsAsync().then((pakets) => {
+            setEntries(buildJadwalEntries(pakets));
+            setLoading(false);
+        });
     }, []);
 
     /* Split upcoming vs history */
@@ -259,7 +262,12 @@ export default function JadwalKeberangkatanPage() {
 
                 {/* ── Upcoming Schedule List ── */}
                 <div className="max-w-5xl mx-auto px-4 sm:px-8 pb-6">
-                    {paginated.length === 0 ? (
+                    {loading ? (
+                        <div className="text-center py-16 text-gray-400">
+                            <svg className="animate-spin w-10 h-10 mx-auto border-4 border-teal-500 border-t-transparent rounded-full mb-3"></svg>
+                            <p className="font-semibold text-gray-500">Memuat jadwal...</p>
+                        </div>
+                    ) : paginated.length === 0 ? (
                         <div className="text-center py-16 text-gray-400">
                             <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

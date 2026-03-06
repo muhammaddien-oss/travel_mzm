@@ -154,13 +154,20 @@ export default function AdminPage() {
         setIsSaving(true);
         try {
             let updated: Paket[];
+
+            // CASCADE status "Sudah Berangkat" to nested schedules
+            let payload = { ...form };
+            if (payload.statusPublish === "Sudah Berangkat" && payload.tanggalBerangkat) {
+                payload.tanggalBerangkat = payload.tanggalBerangkat.map(t => ({ ...t, status: "berangkat" }));
+            }
+
             if (editId) {
-                const res = await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editId, ...form }) });
+                const res = await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editId, ...payload }) });
                 const saved = await res.json();
                 updated = pakets.map(p => p.id === editId ? saved : p);
                 showToast("Paket berhasil diperbarui.");
             } else {
-                const res = await fetch("/api/pakets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+                const res = await fetch("/api/pakets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                 const saved = await res.json();
                 updated = [...pakets, saved];
                 showToast("Berhasil! Paket baru ditambahkan.");
@@ -189,8 +196,16 @@ export default function AdminPage() {
 
     async function handleStatusChange(p: Paket, v: string) {
         if (v !== "Tersedia" && v !== "Sudah Berangkat") return;
-        await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...p, statusPublish: v }) });
-        const u = pakets.map(i => i.id === p.id ? { ...i, statusPublish: v as "Tersedia" | "Sudah Berangkat" } : i);
+
+        let newTgl = p.tanggalBerangkat || [];
+        if (v === "Sudah Berangkat") {
+            newTgl = newTgl.map(t => ({ ...t, status: "berangkat" }));
+        }
+
+        const dataToSave = { ...p, statusPublish: v, tanggalBerangkat: newTgl };
+        await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dataToSave) });
+
+        const u = pakets.map(i => i.id === p.id ? { ...i, statusPublish: v as "Tersedia" | "Sudah Berangkat", tanggalBerangkat: newTgl } : i);
         setPakets(u); showToast(`Status "${p.nama}" diubah.`);
     }
 
@@ -269,11 +284,16 @@ export default function AdminPage() {
                         <div><Label icon={IoAirplaneOutline}>Maskapai</Label><Input type="text" placeholder="cth: Garuda Indonesia" value={form.maskapai || ""} onChange={e => f("maskapai", e.target.value)} /></div>
                         <div><Label icon={IoLocationOutline}>Berangkat Dari</Label><Input type="text" placeholder="cth: Jakarta (CGK)" value={form.kotaAsal || ""} onChange={e => f("kotaAsal", e.target.value)} /></div>
                         <div><Label icon={IoStarOutline}>Bintang Hotel</Label><Select value={form.hotelMekkahBintang || 4} onChange={e => f("hotelMekkahBintang", Number(e.target.value))}><option value={5}>⭐⭐⭐⭐⭐ Bintang 5</option><option value={4}>⭐⭐⭐⭐ Bintang 4</option><option value={3}>⭐⭐⭐ Bintang 3</option><option value={2}>⭐⭐ Bintang 2</option><option value={0}>— (Tidak Ada / Wisata)</option></Select></div>
-                        <div className="sm:col-span-2"><Label icon={IoListOutline}>Fasilitas <span className="text-gray-400 font-normal normal-case">(pisahkan dengan koma)</span></Label><Textarea rows={2} placeholder="cth: Hotel Bintang 4, Penerbangan Direct, Visa Umroh, Makan 3x/hari" value={(form.fasilitas || []).join(", ")} onChange={e => f("fasilitas", e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean))} /></div>
-                        <div><Label icon={IoRocketOutline}>Status Paket</Label><Select value={form.statusPublish || "Tersedia"} onChange={e => f("statusPublish", e.target.value)}><option value="Tersedia">🟢 Tersedia (Aktif)</option><option value="Sudah Berangkat">⚪ Riwayat</option></Select></div>
+                        <div>
+                            <Label icon={IoRocketOutline}>Status Paket</Label>
+                            <div className="relative">
+                                <Select value={form.statusPublish || "Tersedia"} onChange={e => f("statusPublish", e.target.value)} className="!bg-white !border-teal-100 !text-teal-800 !shadow-sm focus:!ring-teal-500/20">
+                                    <option value="Tersedia">Tersedia</option>
+                                    <option value="Sudah Berangkat">Sudah Berangkat</option>
+                                </Select>
+                            </div>
+                        </div>
                         <div><Label icon={IoPricetagOutline}>Label Badge</Label><Input type="text" placeholder="cth: TERLARIS" value={form.badge} onChange={e => f("badge", e.target.value)} /></div>
-                        <div><Label icon={IoColorPaletteOutline}>Warna Badge</Label><div className="flex items-center gap-3"><input type="color" value={form.badgeColor} onChange={e => f("badgeColor", e.target.value)} className="w-10 h-10 rounded-lg cursor-pointer border border-gray-200 p-0.5" /><span className="text-sm text-gray-400 font-mono">{form.badgeColor}</span></div></div>
-                        <div className="sm:col-span-2"><Label icon={IoDocumentTextOutline}>Deskripsi</Label><Textarea rows={2} placeholder="Deskripsi singkat tentang paket..." value={form.deskripsi} onChange={e => f("deskripsi", e.target.value)} /></div>
                         {/* Gambar */}
                         <div className="sm:col-span-2">
                             <Label icon={IoImageOutline}>Foto Paket</Label>
@@ -325,12 +345,20 @@ export default function AdminPage() {
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                     <div className="relative hidden sm:block">
-                        <select value={p.statusPublish || "Tersedia"} onChange={e => handleStatusChange(p, e.target.value)}
-                            className={`appearance-none text-xs font-bold rounded-lg pl-2.5 pr-7 py-1.5 border cursor-pointer transition shadow-sm ${hist ? "bg-gray-100 border-gray-200 text-gray-500" : "bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100"}`}>
-                            <option value="Tersedia">🟢 Tersedia</option>
-                            <option value="Sudah Berangkat">⚪ Riwayat</option>
+                        <select
+                            value={p.statusPublish || "Tersedia"}
+                            onChange={(e) => {
+                                const newStatus = e.target.value;
+                                if (confirm(`Yakin ingin mengubah status menjadi "${newStatus}"?`)) {
+                                    handleStatusChange(p, newStatus);
+                                }
+                            }}
+                            className={`appearance-none text-xs font-bold rounded-full pl-4 pr-8 py-1.5 border cursor-pointer outline-none transition-all shadow-[0_2px_8px_-3px_rgba(0,0,0,0.1)] ${hist ? "bg-white border-gray-200 text-gray-500 hover:bg-gray-50 focus:ring-2 focus:ring-gray-200" : "bg-white border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 focus:ring-2 focus:ring-teal-500/20"}`}
+                        >
+                            <option value="Tersedia">Tersedia</option>
+                            <option value="Sudah Berangkat">Sudah Berangkat</option>
                         </select>
-                        <IoChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        <IoChevronDown className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${hist ? "text-gray-400" : "text-teal-500"}`} />
                     </div>
                     <button onClick={() => handleEdit(p)} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"><IoCreateOutline className="w-4 h-4" /></button>
                     <button onClick={() => handleDelete(p.id)} className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition"><IoTrashOutline className="w-4 h-4" /></button>
@@ -341,14 +369,16 @@ export default function AdminPage() {
 
     // ─── Jadwal Tab ─────────────────────────────────────────────────────
     function JadwalTab() {
-        const statusCls: Record<string, string> = { tersedia: "bg-green-50 border-green-200 text-green-700", terbatas: "bg-amber-50 border-amber-200 text-amber-700", full: "bg-red-50 border-red-200 text-red-600", berangkat: "bg-gray-100 border-gray-200 text-gray-500" };
-        const statusIcons: Record<string, string> = { tersedia: "✓", terbatas: "⚡", full: "✕", berangkat: "✈" };
+        const statusCls: Record<string, string> = { tersedia: "bg-white border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 focus:ring-2 focus:ring-teal-500/20", terbatas: "bg-white border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300 focus:ring-2 focus:ring-amber-500/20", full: "bg-white border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 focus:ring-2 focus:ring-red-500/20", berangkat: "bg-white border-gray-200 text-gray-500 hover:bg-gray-50 focus:ring-2 focus:ring-gray-200" };
+        const statusIconColors: Record<string, string> = { tersedia: "text-teal-400", terbatas: "text-amber-400", full: "text-red-400", berangkat: "text-gray-400" };
         type FE = { pid: string; nama: string; kat: Paket["kategori"]; tgl: string; status: string; idx: number };
-        const flat: FE[] = [];
-        pakets.forEach(p => (p.tanggalBerangkat || []).forEach((t, i) => { if (jadwalFilterKat !== "all" && p.kategori !== jadwalFilterKat) return; flat.push({ pid: p.id, nama: p.nama, kat: p.kategori, tgl: t.tanggal, status: t.status, idx: i }); }));
-        flat.sort((a, b) => a.tgl.localeCompare(b.tgl));
-        const up = flat.filter(e => e.status !== "berangkat");
-        const hist = flat.filter(e => e.status === "berangkat");
+        const allM = pakets.flatMap(p => (p.tanggalBerangkat || []).map((t, i) => ({ pid: p.id, idx: i, nama: p.nama, kat: p.kategori, tgl: t.tanggal, status: t.status })))
+            .filter(e => (jadwalFilterKat === "all" || e.kat === jadwalFilterKat))
+            .sort((a, b) => a.tgl.localeCompare(b.tgl));
+
+        const todayDate = new Date().toISOString().split("T")[0];
+        const activeJadwal = allM.filter(e => e.status !== "berangkat" && e.tgl >= todayDate);
+        const histJadwal = allM.filter(e => e.status === "berangkat" || e.tgl < todayDate);
 
         async function updStatus(pid: string, idx: number, s: string) {
             const u = pakets.map(p => { if (p.id !== pid) return p; const d = [...(p.tanggalBerangkat || [])]; d[idx] = { ...d[idx], status: s as "tersedia" | "terbatas" | "full" | "berangkat" }; return { ...p, tanggalBerangkat: d }; });
@@ -357,6 +387,7 @@ export default function AdminPage() {
             setPakets(u);
         }
         async function rmDate(pid: string, idx: number) {
+            if (!confirm("Hapus jadwal keberangkatan ini?")) return;
             const u = pakets.map(p => p.id !== pid ? p : { ...p, tanggalBerangkat: (p.tanggalBerangkat || []).filter((_, i) => i !== idx) });
             const target = u.find(p => p.id === pid);
             if (target) await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(target) });
@@ -377,7 +408,11 @@ export default function AdminPage() {
                 <Card>
                     <CardHead icon={IoAddCircleOutline} title="Tambah Jadwal Baru" sub="Pilih paket & tentukan tanggal" />
                     <div className="p-5 flex flex-col sm:flex-row gap-3">
-                        <Select value={jadwalNewPaket} onChange={e => setJadwalNewPaket(e.target.value)} className="flex-1">
+                        <Select
+                            value={jadwalNewPaket}
+                            onChange={e => setJadwalNewPaket(e.target.value)}
+                            className="flex-1"
+                        >
                             <option value="">Pilih Paket...</option>{pakets.map(p => <option key={p.id} value={p.id}>{p.nama} ({p.kategori})</option>)}
                         </Select>
                         <Input type="date" value={jadwalNewDate} onChange={e => setJadwalNewDate(e.target.value)} className="sm:w-44" />
@@ -386,33 +421,70 @@ export default function AdminPage() {
                 </Card>
 
                 <div className="flex items-center justify-between flex-wrap gap-3">
-                    <h2 className="text-sm font-bold text-gray-800 flex items-center gap-1.5"><IoCalendarOutline className="w-4 h-4 text-teal-600" /> Jadwal Mendatang <span className="text-gray-400 font-normal ml-1">({up.length})</span></h2>
+                    <h2 className="text-sm font-bold text-gray-800 flex items-center gap-1.5"><IoCalendarOutline className="w-4 h-4 text-teal-600" /> Jadwal Mendatang <span className="text-gray-400 font-normal ml-1">({activeJadwal.length})</span></h2>
                     <div className="flex gap-1.5 flex-wrap">{(["all", "umroh", "haji", "wisata"] as const).map(k => <button key={k} onClick={() => setJadwalFilterKat(k)} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${jadwalFilterKat === k ? "bg-teal-700 text-white" : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"}`}>{k === "all" ? "Semua" : KAT_LABELS[k]}</button>)}</div>
                 </div>
 
                 <Card>
-                    {up.length === 0 ? <Empty icon={IoCalendarOutline} msg="Belum ada jadwal mendatang" hint="Tambah jadwal baru di atas" /> : up.map(e => {
-                        const d = new Date(e.tgl + "T00:00:00");
-                        return (
-                            <div key={`${e.pid}-${e.idx}`} className="flex items-center gap-4 px-4 py-3.5 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition">
-                                <div className="flex-shrink-0 w-12 text-center">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: KAT_COLORS[e.kat] }}>{months[d.getMonth()]}</p>
-                                    <p className="text-xl font-black leading-tight" style={{ color: KAT_COLORS[e.kat] }}>{d.getDate().toString().padStart(2, "0")}</p>
-                                    <p className="text-[9px] text-gray-400">{d.getFullYear()}</p>
-                                </div>
-                                <div className="flex-1 min-w-0"><p className="font-semibold text-sm text-gray-900 truncate">{e.nama}</p><Badge label={e.kat} color={KAT_COLORS[e.kat] || "#008080"} /></div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                    <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border ${statusCls[e.status] || statusCls.tersedia}`}>
-                                        <span>{statusIcons[e.status]}</span>
-                                        <select value={e.status} onChange={ev => updStatus(e.pid, e.idx, ev.target.value)} className="bg-transparent border-none focus:outline-none cursor-pointer font-bold uppercase text-[10px]">
-                                            <option value="tersedia">Tersedia</option><option value="terbatas">Terbatas</option><option value="full">Full Booked</option><option value="berangkat">Berangkat</option>
-                                        </select>
+                    <div className="divide-y divide-gray-100">
+                        {activeJadwal.length === 0 ? <Empty icon={IoCalendarOutline} msg="Belum ada jadwal mendatang aktif" hint="Tambah jadwal baru di atas" /> : activeJadwal.map(e => {
+                            const [year, mStr, day] = e.tgl.split("-");
+                            const mIdx = parseInt(mStr) - 1;
+                            return (
+                                <div key={`${e.pid}-${e.idx}`} className="flex items-center gap-4 px-4 py-3.5 hover:bg-gray-50/50 transition">
+                                    <div className="flex-shrink-0 w-12 text-center">
+                                        <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: KAT_COLORS[e.kat] }}>{months[mIdx]}</p>
+                                        <p className="text-xl font-black leading-tight" style={{ color: KAT_COLORS[e.kat] }}>{day}</p>
+                                        <p className="text-[9px] text-gray-400">{year}</p>
                                     </div>
-                                    <button onClick={() => rmDate(e.pid, e.idx)} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 transition flex items-center justify-center"><IoCloseOutline className="w-4 h-4" /></button>
+                                    <div className="flex-1 min-w-0"><p className="font-semibold text-sm text-gray-900 truncate">{e.nama}</p><Badge label={e.kat} color={KAT_COLORS[e.kat] || "#008080"} /></div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <div className="relative">
+                                            <select value={e.status} onChange={ev => updStatus(e.pid, e.idx, ev.target.value)} className={`appearance-none text-[10px] font-bold uppercase tracking-[0.05em] rounded-full pl-3 pr-7 py-1.5 border cursor-pointer outline-none transition-all shadow-[0_2px_8px_-3px_rgba(0,0,0,0.1)] ${statusCls[e.status] || statusCls.tersedia}`}>
+                                                <option value="tersedia">Tersedia</option><option value="terbatas">Terbatas</option><option value="full">Full Booked</option><option value="berangkat">Berangkat</option>
+                                            </select>
+                                            <IoChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 ${statusIconColors[e.status] || "text-teal-500"}`} />
+                                        </div>
+                                        <button onClick={() => rmDate(e.pid, e.idx)} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 transition flex items-center justify-center"><IoTrashOutline className="w-4 h-4" /></button>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+
+                        {histJadwal.length > 0 && (
+                            <>
+                                <button type="button" onClick={() => setJadwalShowHistory(!jadwalShowHistory)} className="w-full px-4 py-2.5 bg-gray-50 flex items-center gap-2 hover:bg-gray-100 transition cursor-pointer border-t border-gray-100">
+                                    <IoTimeOutline className="w-3.5 h-3.5 text-gray-400" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Riwayat & Sudah Berangkat ({histJadwal.length})</span>
+                                    <div className="h-px flex-1 bg-gray-200" />
+                                    <IoChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${jadwalShowHistory ? 'rotate-180' : ''}`} />
+                                </button>
+                                {jadwalShowHistory && histJadwal.map(e => {
+                                    const [year, mStr, day] = e.tgl.split("-");
+                                    const mIdx = parseInt(mStr) - 1;
+                                    return (
+                                        <div key={`hist-${e.pid}-${e.idx}`} className="flex items-center gap-4 px-4 py-3.5 bg-gray-50/30 opacity-60 hover:opacity-100 transition">
+                                            <div className="flex-shrink-0 w-12 text-center grayscale">
+                                                <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: KAT_COLORS[e.kat] }}>{months[mIdx]}</p>
+                                                <p className="text-xl font-black leading-tight" style={{ color: KAT_COLORS[e.kat] }}>{day}</p>
+                                                <p className="text-[9px] text-gray-400">{year}</p>
+                                            </div>
+                                            <div className="flex-1 min-w-0"><p className="font-semibold text-sm text-gray-900 truncate">{e.nama}</p><Badge label={e.kat} color="#9ca3af" /></div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <div className="relative">
+                                                    <select value={e.status} onChange={ev => updStatus(e.pid, e.idx, ev.target.value)} className={`appearance-none text-[10px] font-bold uppercase tracking-[0.05em] rounded-full pl-3 pr-7 py-1.5 border cursor-pointer outline-none transition-all shadow-[0_2px_8px_-3px_rgba(0,0,0,0.1)] bg-white border-gray-200 text-gray-500 hover:bg-gray-50 focus:ring-2 focus:ring-gray-200`}>
+                                                        <option value="tersedia">Ke Tersedia</option><option value="terbatas">Ke Terbatas</option><option value="full">Ke Full Booked</option><option value="berangkat">Berangkat</option>
+                                                    </select>
+                                                    <IoChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                                                </div>
+                                                <button onClick={() => rmDate(e.pid, e.idx)} className="w-7 h-7 rounded-lg bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 transition flex items-center justify-center"><IoTrashOutline className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </>
+                        )}
+                    </div>
                 </Card>
 
 
