@@ -73,7 +73,10 @@ export async function GET(req: NextRequest) {
         .order("created_at", { ascending: true })
         .limit(100);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+        console.error("Supabase Error [Pakets]:", error);
+        return NextResponse.json([]); // Return array kosong supaya client tidak crash `.map is not a function`
+    }
 
     // Header Cache-Control agresif + stale-while-revalidate untuk list fetch
     return NextResponse.json((data || []).map(rowToPaket), {
