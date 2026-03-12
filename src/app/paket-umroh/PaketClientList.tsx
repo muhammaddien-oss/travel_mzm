@@ -146,6 +146,7 @@ export default function PaketClientList({ initialPakets }: { initialPakets: Pake
     });
 
     const isAllBerangkat = (p: Paket) => {
+        if (p.statusPublish === "Tersedia") return false; // eksplisit Tersedia → selalu tampil
         if (p.statusPublish === "Sudah Berangkat") return true;
         const dates = p.tanggalBerangkat || [];
         return dates.length > 0 && dates.every(d => d.status === "berangkat");

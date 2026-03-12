@@ -133,6 +133,7 @@ export default function WisataClientList({ initialPakets }: { initialPakets: Pak
     const filtered = initialPakets.filter(p => (p.nama || "").toLowerCase().includes(search.toLowerCase()) || (p.deskripsi || "").toLowerCase().includes(search.toLowerCase()));
 
     const isAllBerangkat = (p: Paket) => {
+        if (p.statusPublish === "Tersedia") return false; // eksplisit Tersedia → selalu tampil
         if (p.statusPublish === "Sudah Berangkat") return true;
         const dates = p.tanggalBerangkat || [];
         return dates.length > 0 && dates.every(d => d.status === "berangkat");

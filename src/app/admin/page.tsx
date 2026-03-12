@@ -106,6 +106,7 @@ export default function AdminPage() {
     const [toast, setToastState] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
     const [form, setForm] = useState<Omit<Paket, "id">>(EMPTY_FORM);
     const [editId, setEditId] = useState<string | null>(null);
     const [showRiwayat, setShowRiwayat] = useState(false);
@@ -196,17 +197,30 @@ export default function AdminPage() {
 
     async function handleStatusChange(p: Paket, v: string) {
         if (v !== "Tersedia" && v !== "Sudah Berangkat") return;
+        if (savingStatusId === p.id) return;
 
-        let newTgl = p.tanggalBerangkat || [];
-        if (v === "Sudah Berangkat") {
-            newTgl = newTgl.map(t => ({ ...t, status: "berangkat" }));
+        setSavingStatusId(p.id);
+        try {
+            let newTgl = p.tanggalBerangkat || [];
+            if (v === "Sudah Berangkat") {
+                // Semua jadwal → berangkat
+                newTgl = newTgl.map(t => ({ ...t, status: "berangkat" as const }));
+            } else {
+                // Kembalikan ke Tersedia: jadwal yang "berangkat" → "tersedia" lagi
+                newTgl = newTgl.map(t => ({ ...t, status: (t.status === "berangkat" ? "tersedia" : t.status) as "tersedia" | "terbatas" | "full" | "berangkat" }));
+            }
+
+            const dataToSave = { ...p, statusPublish: v, tanggalBerangkat: newTgl };
+            await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dataToSave) });
+
+            const u = pakets.map(i => i.id === p.id ? { ...i, statusPublish: v as "Tersedia" | "Sudah Berangkat", tanggalBerangkat: newTgl } : i);
+            setPakets(u);
+            showToast(`Status "${p.nama}" diubah ke ${v}.`);
+        } catch {
+            showToast("Gagal mengubah status.", "err");
+        } finally {
+            setSavingStatusId(null);
         }
-
-        const dataToSave = { ...p, statusPublish: v, tanggalBerangkat: newTgl };
-        await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dataToSave) });
-
-        const u = pakets.map(i => i.id === p.id ? { ...i, statusPublish: v as "Tersedia" | "Sudah Berangkat", tanggalBerangkat: newTgl } : i);
-        setPakets(u); showToast(`Status "${p.nama}" diubah.`);
     }
 
     function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
@@ -345,8 +359,15 @@ export default function AdminPage() {
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                     <div className="relative hidden sm:block">
+                        {savingStatusId === p.id ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-full bg-gray-100 text-gray-400 border border-gray-200">
+                                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                Menyimpan...
+                            </span>
+                        ) : (
                         <select
                             value={p.statusPublish || "Tersedia"}
+                            disabled={!!savingStatusId}
                             onChange={(e) => {
                                 const newStatus = e.target.value;
                                 if (confirm(`Yakin ingin mengubah status menjadi "${newStatus}"?`)) {
@@ -358,7 +379,8 @@ export default function AdminPage() {
                             <option value="Tersedia">Tersedia</option>
                             <option value="Sudah Berangkat">Sudah Berangkat</option>
                         </select>
-                        <IoChevronDown className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${hist ? "text-gray-400" : "text-teal-500"}`} />
+                        )}
+                        {savingStatusId !== p.id && <IoChevronDown className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${hist ? "text-gray-400" : "text-teal-500"}`} />}
                     </div>
                     <div className="flex sm:flex-row flex-col gap-1.5">
                         <button onClick={() => handleEdit(p)} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"><IoCreateOutline className="w-4 h-4" /></button>
