@@ -413,7 +413,9 @@ export default function AdminPage() {
                 d[idx] = { ...d[idx], status: s as "tersedia" | "terbatas" | "full" | "berangkat" }; 
                 
                 // 2. Cek semua tanggal untuk auto-update statusPublish paket
-                const isAllBerangkat = d.length > 0 && d.every(tgl => tgl.status === "berangkat");
+                //    Jadwal dianggap "selesai" jika status "berangkat" ATAU tanggalnya sudah lewat hari ini
+                const today = new Date().toISOString().split("T")[0];
+                const isAllBerangkat = d.length > 0 && d.every(tgl => tgl.status === "berangkat" || tgl.tanggal < today);
                 const newStatusPublish = (isAllBerangkat ? "Sudah Berangkat" : "Tersedia") as "Tersedia" | "Sudah Berangkat";
                 
                 return { ...p, statusPublish: newStatusPublish, tanggalBerangkat: d }; 
