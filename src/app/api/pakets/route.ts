@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase";
 import type { Paket } from "@/lib/packagesData";
 
-export const revalidate = 60; // Cache API tiap 60 detik agar tidak lemot
+// Helper: invalidate semua halaman paket setelah ada perubahan data
+function revalidateAllPaketPages() {
+    revalidatePath("/paket-umroh");
+    revalidatePath("/paket-haji");
+    revalidatePath("/paket-wisata");
+    revalidatePath("/jadwal-keberangkatan");
+    revalidatePath("/");
+}
 
 // DB row → Paket type
 function rowToPaket(row: Record<string, unknown>): Paket {
@@ -78,10 +86,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json([]); // Return array kosong supaya client tidak crash `.map is not a function`
     }
 
-    // Header Cache-Control agresif + stale-while-revalidate untuk list fetch
+    // Header Cache-Control — 10 detik jadi fallback setelah revalidatePath
     return NextResponse.json((data || []).map(rowToPaket), {
         headers: {
-            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300"
+            "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30"
         }
     });
 }
@@ -93,6 +101,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase.from("pakets").insert([row]).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    revalidateAllPaketPages();
     return NextResponse.json(rowToPaket(data as Record<string, unknown>));
 }
 
@@ -105,6 +114,7 @@ export async function PUT(req: NextRequest) {
 
     const { data, error } = await supabase.from("pakets").update(row).eq("id", id).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    revalidateAllPaketPages();
     return NextResponse.json(rowToPaket(data as Record<string, unknown>));
 }
 
@@ -115,5 +125,6 @@ export async function DELETE(req: NextRequest) {
 
     const { error } = await supabase.from("pakets").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    revalidateAllPaketPages();
     return NextResponse.json({ ok: true });
 }

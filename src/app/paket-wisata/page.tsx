@@ -4,7 +4,7 @@ import PackageNavbar from "@/components/PackageNavbar";
 import { fetchPaketsServerSide } from "@/lib/fetchPaketsServer";
 import WisataClientList from "./WisataClientList";
 
-export const revalidate = 60; // cache 60 detik, jauh lebih cepat dari force-dynamic
+export const revalidate = 10; // revalidatePath akan invalidate segera setelah admin save
 
 export default async function PaketWisataPage() {
     const allPakets = await fetchPaketsServerSide();
