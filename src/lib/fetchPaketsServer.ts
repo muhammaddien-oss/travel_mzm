@@ -34,18 +34,24 @@ export async function fetchPaketsServerSide(): Promise<Paket[]> {
             "status_publish", "tanggal_berangkat"
         ].join(",");
 
-        const { data, error } = await supabase
-            .from("pakets")
-            .select(columns)
-            .order("created_at", { ascending: true })
-            .limit(100);
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-        if (error) {
-            console.error("Failed to fetch pakets via supabase client:", error.message);
+        const response = await fetch(`${supabaseUrl}/rest/v1/pakets?select=${columns}&order=created_at.asc&limit=100`, {
+            headers: {
+                "apikey": anonKey,
+                "Authorization": `Bearer ${anonKey}`
+            },
+            next: { revalidate: 30 } // Cache request for 30 seconds
+        });
+
+        if (!response.ok) {
+            console.error("Failed to fetch pakets via native fetch:", response.statusText);
             return [];
         }
 
-        return ((data as unknown) as Record<string, unknown>[]).map(rowToPaket);
+        const data = await response.json();
+        return (data as Record<string, unknown>[]).map(rowToPaket);
     } catch (err: any) {
         console.error("fetchPaketsServerSide error:", err);
         return [];
