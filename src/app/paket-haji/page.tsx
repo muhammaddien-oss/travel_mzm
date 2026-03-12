@@ -4,7 +4,7 @@ import PackageNavbar from "@/components/PackageNavbar";
 import { fetchPaketsServerSide } from "@/lib/fetchPaketsServer";
 import HajiClientList from "./HajiClientList";
 
-export const revalidate = 10; // revalidatePath akan invalidate segera setelah admin save
+export const dynamic = "force-dynamic"; // selalu fetch fresh dari DB, tidak ada cache delay
 
 export default async function PaketHajiPage() {
     const allPakets = await fetchPaketsServerSide();
