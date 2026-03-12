@@ -405,9 +405,26 @@ export default function AdminPage() {
         const histJadwal = allM.filter(e => e.status === "berangkat" || e.tgl < todayDate);
 
         async function updStatus(pid: string, idx: number, s: string) {
-            const u = pakets.map(p => { if (p.id !== pid) return p; const d = [...(p.tanggalBerangkat || [])]; d[idx] = { ...d[idx], status: s as "tersedia" | "terbatas" | "full" | "berangkat" }; return { ...p, tanggalBerangkat: d }; });
+            const u = pakets.map(p => { 
+                if (p.id !== pid) return p; 
+                
+                // 1. Update status per-tanggal
+                const d = [...(p.tanggalBerangkat || [])]; 
+                d[idx] = { ...d[idx], status: s as "tersedia" | "terbatas" | "full" | "berangkat" }; 
+                
+                // 2. Cek semua tanggal untuk auto-update statusPublish paket
+                const isAllBerangkat = d.length > 0 && d.every(tgl => tgl.status === "berangkat");
+                const newStatusPublish = (isAllBerangkat ? "Sudah Berangkat" : "Tersedia") as "Tersedia" | "Sudah Berangkat";
+                
+                return { ...p, statusPublish: newStatusPublish, tanggalBerangkat: d }; 
+            });
             const target = u.find(p => p.id === pid);
-            if (target) await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(target) });
+            if (target) {
+                await fetch("/api/pakets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(target) });
+                if (target.statusPublish === "Sudah Berangkat") {
+                    showToast(`Sistem: Semua jadwal berangkat, paket "${target.nama}" otomatis ditutup.`);
+                }
+            }
             setPakets(u);
         }
         async function rmDate(pid: string, idx: number) {
@@ -437,7 +454,8 @@ export default function AdminPage() {
                             onChange={e => setJadwalNewPaket(e.target.value)}
                             className="flex-1"
                         >
-                            <option value="">Pilih Paket...</option>{pakets.map(p => <option key={p.id} value={p.id}>{p.nama} ({p.kategori})</option>)}
+                            <option value="">Pilih Paket...</option>
+                            {pakets.filter(p => p.statusPublish !== "Sudah Berangkat").map(p => <option key={p.id} value={p.id}>{p.nama} ({p.kategori})</option>)}
                         </Select>
                         <Input type="date" value={jadwalNewDate} onChange={e => setJadwalNewDate(e.target.value)} className="sm:w-44" />
                         <button onClick={addDate} className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl text-white text-sm font-bold bg-teal-600 hover:bg-teal-700 transition whitespace-nowrap"><IoAddCircleOutline className="w-4 h-4" /> Tambah</button>
